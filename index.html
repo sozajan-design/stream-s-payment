@@ -21,33 +21,35 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        input[type="number"], input[type="text"], input[type="date"] { font-size: 16px !important; }
+        input[type="number"], input[type="text"], input[type="date"], input[type="password"] { font-size: 16px !important; }
         @media (min-width: 1024px) {
             .sticky-column { position: sticky; top: 20px; height: fit-content; }
         }
         .animate-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* 電視色塊閃爍動畫 */
+        /* 電視載入動畫 - 修正補回彩色閃爍 */
+        @keyframes static-noise { 0% { background-position: 0 0; } 100% { background-position: 100% 100%; } }
+        .tv-static {
+            background-image: repeating-linear-gradient(transparent, transparent 2px, #fff 2px, #fff 4px), repeating-linear-gradient(90deg, transparent, transparent 2px, #fff 2px, #fff 4px);
+            background-size: 100% 100%; opacity: 0.1; animation: static-noise 0.5s infinite linear;
+        }
+        
         @keyframes color-flash {
             0% { background-color: #ef4444; } /* 紅 */
-            20% { background-color: #f97316; } /* 橘 */
-            40% { background-color: #eab308; } /* 黃 */
-            60% { background-color: #22c55e; } /* 綠 */
-            80% { background-color: #3b82f6; } /* 藍 */
-            100% { background-color: #a855f7; } /* 紫 */
+            15% { background-color: #f97316; } /* 橘 */
+            30% { background-color: #eab308; } /* 黃 */
+            45% { background-color: #22c55e; } /* 綠 */
+            60% { background-color: #06b6d4; } /* 青 */
+            75% { background-color: #3b82f6; } /* 藍 */
+            90% { background-color: #a855f7; } /* 紫 */
         }
         .tv-screen-flash {
-            animation: color-flash 3s infinite steps(1); /* steps(1) 讓顏色直接跳換，更有電視雜訊感 */
+            animation: color-flash 2s infinite steps(1);
         }
 
-        /* 天線搖晃 */
-        @keyframes antenna-wiggle { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
-        .antenna { transform-origin: bottom center; animation: antenna-wiggle 3s infinite ease-in-out; }
-
-        /* 柯基搖尾巴 */
-        @keyframes tail-wag { 0%, 100% { transform: rotate(-20deg); } 50% { transform: rotate(20deg); } }
-        .corgi-tail { transform-origin: bottom center; animation: tail-wag 0.5s infinite; }
+        @keyframes antenna-wiggle { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+        .antenna { transform-origin: bottom center; animation: antenna-wiggle 2s infinite ease-in-out; }
     </style>
 </head>
 <body>
@@ -59,7 +61,7 @@
         const BANK_CODE = "812";
         const BANK_NAME = "台新銀行";
         const BANK_ACCOUNT = "28881000738863";
-        const APP_VERSION = "v3.1.9-ColorTV";
+        const APP_VERSION = "v3.1.9-UI-Tweak";
 
         const THEMES = {
             'apple-music': { 
@@ -121,7 +123,8 @@
             Database: (p) => <LucideIcon name="database" {...p} />,
             Music: (p) => <LucideIcon name="music" {...p} />,
             Clapperboard: (p) => <LucideIcon name="clapperboard" {...p} />,
-            PlayCircle: (p) => <LucideIcon name="play-circle" {...p} />
+            PlayCircle: (p) => <LucideIcon name="play-circle" {...p} />,
+            Lock: (p) => <LucideIcon name="lock" {...p} />
         };
 
         // --- 載入動畫 (柯基看電視 - 色塊閃爍版) ---
@@ -191,6 +194,8 @@
             const [toast, setToast] = React.useState(null);
             const [isSyncing, setIsSyncing] = React.useState(false);
             const [shareDialog, setShareDialog] = React.useState({ isOpen: false, message: "" });
+            const [isLoginOpen, setIsLoginOpen] = React.useState(false);
+            const [passwordInput, setPasswordInput] = React.useState("");
 
             const theme = THEMES[activeTab] || THEMES['apple-music'];
             const showToast = (message, type = 'success') => setToast({ message, type });
@@ -212,7 +217,6 @@
                 } catch (e) {
                     console.error("Fetch Error", e);
                 } finally {
-                    // 確保動畫播放至少 1.5 秒
                     setTimeout(() => setLoading(false), 1500);
                 }
             };
@@ -257,6 +261,17 @@
             }, [editCost, activeMembersCount]);
 
             // Handlers
+            const handleLogin = () => {
+                if (passwordInput === "0911") {
+                    setIsAdminMode(true);
+                    setIsLoginOpen(false);
+                    setPasswordInput("");
+                    showToast("管理員登入成功", "success");
+                } else {
+                    showToast("密碼錯誤", "error");
+                }
+            };
+
             const handleAddMember = () => {
                 if (!newMemberName.trim()) return;
                 const name = newMemberName.trim();
@@ -333,6 +348,30 @@
                 <div className="min-h-screen flex flex-col max-w-6xl mx-auto px-4 py-6">
                     {toast && <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-xl shadow-xl text-white font-bold flex items-center gap-3 animate-in ${theme.primary}`}><Icons.CheckCircle size={22} /> {toast.message}</div>}
                     
+                    {/* 登入視窗 */}
+                    {isLoginOpen && (
+                        <div className="fixed inset-0 z-[600] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <Card className="max-w-sm w-full p-8 space-y-6">
+                                <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800 justify-center">
+                                    <Icons.ShieldAlert size={24} className="text-blue-600"/> 管理員驗證
+                                </h3>
+                                <div className="space-y-4">
+                                    <input 
+                                        type="password" 
+                                        value={passwordInput}
+                                        onChange={(e) => setPasswordInput(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-center text-lg font-bold outline-none focus:border-blue-500 bg-white tracking-widest"
+                                        placeholder="請輸入密碼"
+                                        autoFocus
+                                        onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                                    />
+                                    <button onClick={handleLogin} className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95 transition-all">確認</button>
+                                    <button onClick={() => { setIsLoginOpen(false); setPasswordInput(""); }} className="w-full py-2 text-slate-400 font-bold text-sm hover:text-slate-600">取消</button>
+                                </div>
+                            </Card>
+                        </div>
+                    )}
+
                     {shareDialog.isOpen && (
                         <div className="fixed inset-0 z-[500] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                             <Card className="max-w-md w-full p-8 space-y-6">
@@ -352,7 +391,13 @@
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{isAdminMode ? '管理者專用模式' : '成員帳務查詢介面'}</p>
                             </div>
                         </div>
-                        <button onClick={() => setIsAdminMode(!isAdminMode)} className={`px-5 py-2.5 rounded-full font-bold text-xs transition-all border-2 ${isAdminMode ? 'bg-slate-800 text-white border-slate-800' : `${theme.light} ${theme.text} ${theme.border} hover:bg-white shadow-sm`}`}>
+                        <button 
+                            onClick={() => {
+                                if(isAdminMode) setIsAdminMode(false);
+                                else setIsLoginOpen(true);
+                            }} 
+                            className={`px-5 py-2.5 rounded-full font-bold text-xs transition-all border-2 ${isAdminMode ? 'bg-slate-800 text-white border-slate-800' : `${theme.light} ${theme.text} ${theme.border} hover:bg-white shadow-sm`}`}
+                        >
                             {isAdminMode ? '離開管理' : '管理員登入'}
                         </button>
                     </nav>
@@ -421,7 +466,6 @@
                                         )}
                                     </div>
                                 </Card>
-
                                 {!isAdminMode && activeMembersCount > 0 && (
                                     <Card className={`bg-white px-6 py-4 border-l-4 shadow-sm space-y-2.5 ${theme.border}`}>
                                         <div className="flex items-center gap-2">
@@ -499,10 +543,10 @@
                             </div>
                         </div>
                     </main>
-                    <footer className="py-20 text-center mt-12 border-t border-slate-200 opacity-40">
+                    <footer className="py-12 text-center mt-12 border-t border-slate-200">
                         <div className="text-lg font-bold tracking-[0.3em] text-slate-500 uppercase font-sans">日安匕禾</div>
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-2">BEAVER TECH SYSTEM</div>
-                        <div className="text-[9px] mt-8 font-mono font-bold text-slate-300 tracking-widest">{APP_VERSION}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">BEAVER TECH SYSTEM</div>
+                        <div className="text-[10px] mt-2 font-mono font-bold text-slate-400 tracking-widest">{APP_VERSION}</div>
                     </footer>
                 </div>
             );
