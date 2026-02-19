@@ -49,7 +49,7 @@
         const BANK_CODE = "812";
         const BANK_NAME = "台新銀行";
         const BANK_ACCOUNT = "28881000738863";
-        const APP_VERSION = "v3.2.0-FixDelete";
+        const APP_VERSION = "v3.2.1-UI-Fix";
 
         const THEMES = {
             'apple-music': { 
@@ -108,7 +108,7 @@
             CreditCard: (p) => <LucideIcon name="credit-card" {...p} />,
             Share: (p) => <LucideIcon name="share" {...p} />,
             Save: (p) => <LucideIcon name="save" {...p} />,
-            Database: (p) => <LucideIcon name="database" {...p} />
+            AlertTriangle: (p) => <LucideIcon name="alert-triangle" {...p} />
         };
 
         // --- 載入動畫 ---
@@ -162,13 +162,33 @@
             const [newMemberName, setNewMemberName] = React.useState("");
             const [passwordInput, setPasswordInput] = React.useState("");
             
+            // 系統提示狀態
             const [toast, setToast] = React.useState(null);
             const [isSyncing, setIsSyncing] = React.useState(false);
             const [shareDialog, setShareDialog] = React.useState({ isOpen: false, message: "" });
             const [isLoginOpen, setIsLoginOpen] = React.useState(false);
 
+            // 自訂確認視窗狀態
+            const [confirmConfig, setConfirmConfig] = React.useState({
+                isOpen: false, title: '', message: '', icon: null, onConfirm: () => {}
+            });
+            
+            const toastTimerRef = React.useRef(null);
+
             const theme = THEMES[activeTab] || THEMES['apple-music'];
-            const showToast = (message, type = 'success') => setToast({ message, type });
+            
+            // 修復 Toast 小視窗不會消失的問題
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+                toastTimerRef.current = setTimeout(() => {
+                    setToast(null);
+                }, 3000);
+            };
+
+            const showConfirm = (title, message, icon, onConfirm) => {
+                setConfirmConfig({ isOpen: true, title, message, icon, onConfirm });
+            };
 
             // 1. 資料讀取
             const fetchData = async (showLoading = true) => {
@@ -213,7 +233,6 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    // 給後端一點時間寫入
                     setTimeout(() => fetchData(false), 3000);
                 } catch (e) {
                     showToast("同步失敗", "error");
@@ -235,20 +254,20 @@
             // --- 事件處理 ---
             const handleLogin = () => {
                 if (passwordInput === "0911") {
-                    setIsAdminMode(true); setIsLoginOpen(false); setPasswordInput(""); showToast("管理員登入成功");
-                } else { showToast("密碼錯誤", "error"); }
+                    setIsAdminMode(true); setIsLoginOpen(false); setPasswordInput(""); 
+                } else { 
+                    showToast("密碼錯誤", "error"); 
+                }
             };
 
             const handleAddMember = () => {
                 if (!newMemberName.trim()) return;
                 const name = newMemberName.trim();
                 
-                // 1. 立即更新介面
                 setMembers(prev => [...prev, { name: name, subscriptions: {[activeTab]: true}, payments: {[activeTab]: false} }]);
                 setNewMemberName("");
                 showToast("成員已加入 (同步中...)");
                 
-                // 2. 傳送同步請求 (包含重新計算後的金額)
                 const newCount = activeMembersCount + 1;
                 const mFee = Math.ceil(Number(editCost) / (newCount || 1));
                 syncAction({
@@ -257,20 +276,24 @@
                 });
             };
 
+            // 修復：使用自訂確認對話框代替 window.confirm
             const handleDeleteMember = (name) => {
-                if (!confirm(`確定要移除成員「${name}」嗎？`)) return;
-                
-                // 1. 立即更新介面
-                setMembers(prev => prev.filter(m => m.name !== name));
-                showToast("成員已移除");
-                
-                // 2. 傳送同步請求 (包含重新計算後的金額)
-                const newCount = activeMembersCount - 1;
-                const mFee = Math.ceil(Number(editCost) / (newCount || 1));
-                syncAction({
-                    action: 'DELETE_MEMBER', serviceId: activeTab, memberName: name,
-                    startDate: editPeriod, annualAmount: mFee * 12, monthlyShare: mFee
-                });
+                showConfirm(
+                    "移除成員", 
+                    `確定要將「${name}」移除嗎？費用將自動重新計算。`, 
+                    "Trash2", 
+                    () => {
+                        setMembers(prev => prev.filter(m => m.name !== name));
+                        showToast("成員已移除");
+                        
+                        const newCount = activeMembersCount - 1;
+                        const mFee = Math.ceil(Number(editCost) / (newCount || 1));
+                        syncAction({
+                            action: 'DELETE_MEMBER', serviceId: activeTab, memberName: name,
+                            startDate: editPeriod, annualAmount: mFee * 12, monthlyShare: mFee
+                        });
+                    }
+                );
             };
 
             const handleMarkAsPaid = (name) => {
@@ -301,20 +324,34 @@
                 setIsUserEditing(false);
             };
 
+            // 修復：使用自訂確認對話框
             const handleRecalculate = () => {
-                if(!confirm(`確定要以目前總金額 $${editCost} 重新計算所有 ${activeMembersCount} 位成員的費用嗎？`)) return;
-                const mFee = Math.ceil(Number(editCost) / (activeMembersCount || 1));
-                syncAction({
-                    action: 'UPDATE_SERVICE', serviceId: activeTab,
-                    data: {totalCost: editCost, period: editPeriod},
-                    startDate: editPeriod, annualAmount: mFee * 12, monthlyShare: mFee
-                }, "已重新計算並寫入 Excel");
+                showConfirm(
+                    "重新計算費用", 
+                    `確定要以目前總金額 $${editCost} 重新計算所有 ${activeMembersCount} 位成員的費用嗎？`, 
+                    "Calculator", 
+                    () => {
+                        const mFee = Math.ceil(Number(editCost) / (activeMembersCount || 1));
+                        syncAction({
+                            action: 'UPDATE_SERVICE', serviceId: activeTab,
+                            data: {totalCost: editCost, period: editPeriod},
+                            startDate: editPeriod, annualAmount: mFee * 12, monthlyShare: mFee
+                        }, "已重新計算並寫入 Excel");
+                    }
+                );
             };
 
+            // 修復：使用自訂確認對話框
             const handleResetPeriod = () => {
-                if (!confirm("確定開啟新的一期？所有人狀態將重置。")) return;
-                setMembers(prev => prev.map(m => m.subscriptions[activeTab] ? { ...m, payments: { ...m.payments, [activeTab]: false } } : m));
-                syncAction({action: 'RESET_PERIOD', serviceId: activeTab}, "狀態重置完成");
+                showConfirm(
+                    "開啟新一期", 
+                    "確定開啟新的一期？所有人狀態將重置為未繳。", 
+                    "RefreshCw", 
+                    () => {
+                        setMembers(prev => prev.map(m => m.subscriptions[activeTab] ? { ...m, payments: { ...m.payments, [activeTab]: false } } : m));
+                        syncAction({action: 'RESET_PERIOD', serviceId: activeTab}, "狀態重置完成");
+                    }
+                );
             };
 
             const getFullPeriodRange = () => {
@@ -326,18 +363,39 @@
             };
 
             const handleCopy = (text) => {
-                const el = document.createElement('textarea');
-                el.value = text; document.body.appendChild(el); el.select();
-                document.execCommand('copy'); document.body.removeChild(el);
-                showToast("已成功複製到剪貼簿");
+                const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); showToast("已成功複製到剪貼簿");
             };
 
             if (loading) return <LoadingScreen />;
 
             return (
-                <div className="min-h-screen flex flex-col max-w-6xl mx-auto px-4 py-6">
-                    {toast && <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-xl shadow-xl text-white font-bold flex items-center gap-3 animate-in ${theme.primary}`}><Icons.CheckCircle size={22} /> {toast.message}</div>}
+                <div className="min-h-screen flex flex-col max-w-6xl mx-auto px-4 py-6 relative">
                     
+                    {/* 提示小視窗 (已修復自動消失) */}
+                    {toast && (
+                        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-xl shadow-xl text-white font-bold flex items-center gap-3 animate-in ${theme.primary}`}>
+                            <Icons.CheckCircle size={22} /> {toast.message}
+                        </div>
+                    )}
+
+                    {/* 自訂確認視窗 (取代原生的 confirm，解決刪除按鈕失效問題) */}
+                    {confirmConfig.isOpen && (
+                        <div className="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in">
+                            <Card className="max-w-sm w-full p-8 space-y-6">
+                                <h3 className="text-xl font-bold flex items-center gap-2 text-red-600 justify-center">
+                                    {confirmConfig.icon && React.createElement(Icons[confirmConfig.icon], { size: 24 })} 
+                                    {confirmConfig.title}
+                                </h3>
+                                <p className="text-center text-slate-700 font-bold leading-relaxed">{confirmConfig.message}</p>
+                                <div className="flex gap-4 mt-4">
+                                    <button onClick={() => setConfirmConfig({...confirmConfig, isOpen: false})} className="flex-1 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all">取消</button>
+                                    <button onClick={() => { confirmConfig.onConfirm(); setConfirmConfig({...confirmConfig, isOpen: false}); }} className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg active:scale-95 transition-all">確認執行</button>
+                                </div>
+                            </Card>
+                        </div>
+                    )}
+                    
+                    {/* 登入視窗 */}
                     {isLoginOpen && (
                         <div className="fixed inset-0 z-[600] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                             <Card className="max-w-sm w-full p-8 space-y-6">
@@ -351,6 +409,7 @@
                         </div>
                     )}
                     
+                    {/* 分享視窗 */}
                     {shareDialog.isOpen && (
                         <div className="fixed inset-0 z-[500] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                             <Card className="max-w-md w-full p-8 space-y-6">
