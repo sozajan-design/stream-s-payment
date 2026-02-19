@@ -49,7 +49,7 @@
         const BANK_CODE = "812";
         const BANK_NAME = "台新銀行";
         const BANK_ACCOUNT = "28881000738863";
-        const APP_VERSION = "v3.2.3-UI-Hint";
+        const APP_VERSION = "v3.2.4-PeriodHint";
 
         const THEMES = {
             'apple-music': { 
@@ -518,7 +518,10 @@
 
                             <div className="lg:col-span-7 space-y-4 text-left">
                                 <div className="flex items-center justify-between px-2">
-                                    <h2 className="text-xl font-bold text-slate-800 tracking-tight text-left">成員繳費狀況明細</h2>
+                                    <h2 className="text-xl font-bold text-slate-800 tracking-tight text-left flex items-baseline gap-2">
+                                        成員繳費狀況明細
+                                        <span className="text-sm font-medium text-slate-500 tracking-normal">({getFullPeriodRange()})</span>
+                                    </h2>
                                     <Badge color={activeTab === 'apple-music' ? 'orange' : (activeTab === 'youtube' ? 'red' : 'green')}>{activeMembersCount} 名成員</Badge>
                                 </div>
                                 <Card className={`divide-y divide-slate-100 shadow-sm border-t-4 ${theme.border}`}>
