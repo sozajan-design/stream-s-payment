@@ -49,7 +49,8 @@
         const BANK_CODE = "812";
         const BANK_NAME = "台新銀行";
         const BANK_ACCOUNT = "28881000738863";
-        const APP_VERSION = "v3.2.4-PeriodHint";
+        const APP_VERSION = "v3.2.5-SpeedUp";
+        const CACHE_KEY = "azhan_payment_cache_v4";
 
         const THEMES = {
             'apple-music': { 
@@ -190,8 +191,21 @@
                 setConfirmConfig({ isOpen: true, title, message, icon, onConfirm });
             };
 
-            // 1. 資料讀取
+            // 1. 資料讀取 (加入極速快取機制)
             const fetchData = async (showLoading = true) => {
+                // A. 先嘗試讀取快取 (達到秒開效果)
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        if (parsed.services) setServices(parsed.services);
+                        if (parsed.members) setMembers(parsed.members);
+                        // 如果有快取，立即關閉載入動畫
+                        if (showLoading) setLoading(false); 
+                        showLoading = false; // 標記為不顯示轉圈，讓背景默默更新
+                    } catch(e) {}
+                }
+
                 if (showLoading) setLoading(true);
                 try {
                     const response = await fetch(`${GAS_URL}?action=GET_ALL&t=${Date.now()}`);
@@ -204,10 +218,18 @@
                         }
                     }
                     if (result.members) setMembers(result.members);
+                    
+                    // 成功抓取後，更新本機快取
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(result));
                 } catch (e) {
                     console.error("Fetch Error", e);
                 } finally {
-                    setTimeout(() => setLoading(false), 1500);
+                    // 移除原本 1.5 秒的強制等待，改為極短的 0.3 秒緩衝避免畫面閃爍
+                    if (showLoading) {
+                        setTimeout(() => setLoading(false), 300);
+                    } else {
+                        setLoading(false);
+                    }
                 }
             };
 
