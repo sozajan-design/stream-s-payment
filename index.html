@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿詹Stream's Payment System</title>
+    <!-- 基礎庫載入 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            margin: 0; padding: 0; background-color: #f8fafc;
+            color: #334155;
+            transition: background-color 0.3s ease;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input[type="number"], input[type="text"], input[type="date"] { font-size: 16px !important; }
+        @media (min-width: 1024px) {
+            .sticky-column { position: sticky; top: 20px; height: fit-content; }
+        }
+        .animate-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 電視載入動畫 */
+        @keyframes static-noise { 0% { background-position: 0 0; } 100% { background-position: 100% 100%; } }
+        .tv-static {
+            background-image: repeating-linear-gradient(transparent, transparent 2px, #fff 2px, #fff 4px), repeating-linear-gradient(90deg, transparent, transparent 2px, #fff 2px, #fff 4px);
+            background-size: 100% 100%; opacity: 0.1; animation: static-noise 0.5s infinite linear;
+        }
+        @keyframes antenna-wiggle { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+        .antenna { transform-origin: bottom center; animation: antenna-wiggle 2s infinite ease-in-out; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 核心配置 ---
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxOU-91bmupGtHCBlJe3iFo1YhpQ_VBc2OAVHWo3wl2BDaRI5ZtvWML_IPBZlH4QcGw/exec";
+        const BANK_CODE = "812";
+        const BANK_NAME = "台新銀行";
+        const BANK_ACCOUNT = "28881000738863";
+        const APP_VERSION = "v3.1.6-SyncFix";
+
+        const THEMES = {
+            'apple-music': { 
+                primary: 'bg-orange-600', border: 'border-orange-600', text: 'text-orange-600', light: 'bg-orange-50', 
+                btn: 'bg-orange-600 hover:bg-orange-700 text-white', activeTab: 'bg-orange-600 text-white shadow-md'
+            },
+            'youtube': { 
+                primary: 'bg-red-600', border: 'border-red-600', text: 'text-red-600', light: 'bg-red-50', 
+                btn: 'bg-red-600 hover:bg-red-700 text-white', activeTab: 'bg-red-600 text-white shadow-md'
+            },
+            'netflix': { 
+                primary: 'bg-green-600', border: 'border-green-600', text: 'text-green-600', light: 'bg-green-50', 
+                btn: 'bg-green-600 hover:bg-green-700 text-white', activeTab: 'bg-green-600 text-white shadow-md'
+            }
+        };
+
+        // --- 子組件 ---
+        function Card({ children, className = "" }) {
+            return <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>{children}</div>;
+        }
+
+        function Badge({ children, color = "blue", className = "" }) {
+            const colors = {
+                blue: "bg-blue-50 text-blue-600 border-blue-100",
+                green: "bg-green-50 text-green-600 border-green-100",
+                red: "bg-red-50 text-red-600 border-red-100",
+                orange: "bg-orange-50 text-orange-600 border-orange-100",
+                slate: "bg-slate-50 text-slate-500 border-slate-200",
+            };
+            return <span className={`text-[10px] px-2 py-0.5 rounded-md border ${colors[color]} font-bold flex items-center gap-1 ${className}`}>{children}</span>;
+        }
+
+        function LucideIcon({ name, size = 20, className = "" }) {
+            if (!window.lucide || !window.lucide.icons) return null;
+            const iconName = name.replace(/([A-Z])/g, "-$1").toLowerCase();
+            const iconData = window.lucide.icons[name] || window.lucide.icons[iconName];
+            if (!iconData) return null;
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} dangerouslySetInnerHTML={{ __html: iconData[2].map(c => `<${c[0]} ${Object.entries(c[1]).map(([k, v]) => `${k}="${v}"`).join(' ')} />`).join('') }} />
+            );
+        }
+
+        const Icons = {
+            Users: (p) => <LucideIcon name="users" {...p} />,
+            Calendar: (p) => <LucideIcon name="calendar" {...p} />,
+            ShieldAlert: (p) => <LucideIcon name="shield-alert" {...p} />,
+            Plus: (p) => <LucideIcon name="plus" {...p} />,
+            Trash2: (p) => <LucideIcon name="trash-2" {...p} />,
+            CheckCircle: (p) => <LucideIcon name="check-circle" {...p} />,
+            XCircle: (p) => <LucideIcon name="x-circle" {...p} />,
+            RefreshCw: (p) => <LucideIcon name="refresh-cw" {...p} />,
+            Wallet: (p) => <LucideIcon name="wallet" {...p} />,
+            UserCheck: (p) => <LucideIcon name="user-check" {...p} />,
+            Calculator: (p) => <LucideIcon name="calculator" {...p} />,
+            Copy: (p) => <LucideIcon name="copy" {...p} />,
+            CreditCard: (p) => <LucideIcon name="credit-card" {...p} />,
+            Share: (p) => <LucideIcon name="share" {...p} />,
+            Save: (p) => <LucideIcon name="save" {...p} />,
+            Database: (p) => <LucideIcon name="database" {...p} />
+        };
+
+        // --- 載入動畫 ---
+        function LoadingScreen() {
+            return (
+                <div className="fixed inset-0 bg-slate-50 z-[9999] flex flex-col items-center justify-center">
+                    <div className="relative mb-8">
+                        <div className="absolute -top-8 left-1/2 w-0.5 h-10 bg-slate-600 -translate-x-1/2 antenna"><div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-slate-600 rounded-full"></div></div>
+                        <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-slate-600 -translate-x-1/2 antenna" style={{animationDelay: '0.5s', transform: 'rotate(15deg)'}}></div>
+                        <div className="w-48 h-36 bg-slate-800 rounded-3xl border-b-8 border-r-8 border-slate-900 shadow-2xl relative flex items-center justify-center p-3">
+                            <div className="w-full h-full bg-blue-100 rounded-xl overflow-hidden relative border-4 border-slate-700 flex items-center justify-center">
+                                <div className="tv-static absolute inset-0"></div>
+                                <Icons.RefreshCw size={32} className="text-blue-500 animate-spin relative z-10" />
+                            </div>
+                            <div className="absolute -right-3 top-6 w-2 h-6 bg-slate-700 rounded-r-md"></div>
+                            <div className="absolute -right-3 top-14 w-2 h-4 bg-slate-700 rounded-r-md"></div>
+                        </div>
+                        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                            <div className="w-16 h-14 bg-orange-400 rounded-t-full border-4 border-white shadow-lg z-10 relative">
+                                <div className="absolute -top-2 -left-2 w-6 h-6 bg-orange-400 rounded-full border-4 border-white"></div>
+                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-orange-400 rounded-full border-4 border-white"></div>
+                            </div>
+                            <div className="w-20 h-8 bg-blue-600 rounded-t-3xl -mt-2"></div>
+                        </div>
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-700 animate-pulse mt-4 tracking-widest">訊號接收中...</h2>
+                    <p className="text-sm text-slate-400 mt-2 font-bold">阿詹正在努力搬運資料</p>
+                </div>
+            );
+        }
+
+        // --- 主程式 ---
+        function App() {
+            const [loading, setLoading] = React.useState(true);
+            const [services, setServices] = React.useState({
+                'apple-music': { name: 'Apple Music', totalCost: 0, period: '' },
+                'youtube': { name: 'YouTube Premium', totalCost: 0, period: '' },
+                'netflix': { name: 'Netflix', totalCost: 0, period: '' }
+            });
+            const [members, setMembers] = React.useState([]);
+            const [activeTab, setActiveTab] = React.useState('apple-music');
+            const [isAdminMode, setIsAdminMode] = React.useState(false);
+            
+            // 本地編輯狀態
+            const [editCost, setEditCost] = React.useState("");
+            const [editPeriod, setEditPeriod] = React.useState("");
+            const [isUserEditing, setIsUserEditing] = React.useState(false);
+            const [newMemberName, setNewMemberName] = React.useState("");
+            
+            const [toast, setToast] = React.useState(null);
+            const [isSyncing, setIsSyncing] = React.useState(false);
+            const [shareDialog, setShareDialog] = React.useState({ isOpen: false, message: "" });
+
+            const theme = THEMES[activeTab] || THEMES['apple-music'];
+            const showToast = (message, type = 'success') => setToast({ message, type });
+
+            // 1. 資料讀取
+            const fetchData = async (showLoading = true) => {
+                if (showLoading) setLoading(true);
+                try {
+                    const response = await fetch(`${GAS_URL}?action=GET_ALL&t=${Date.now()}`);
+                    const result = await response.json();
+                    if (result.services) {
+                        setServices(result.services);
+                        if (!isUserEditing && result.services[activeTab]) {
+                            setEditCost(result.services[activeTab].totalCost || 0);
+                            setEditPeriod(result.services[activeTab].period || "");
+                        }
+                    }
+                    if (result.members) setMembers(result.members);
+                } catch (e) {
+                    console.error("Fetch Error", e);
+                } finally {
+                    setTimeout(() => setLoading(false), 800);
+                }
+            };
+
+            React.useEffect(() => { fetchData(); }, []);
+
+            React.useEffect(() => {
+                const svc = services[activeTab];
+                if (svc) {
+                    setEditCost(svc.totalCost);
+                    setEditPeriod(svc.period);
+                }
+            }, [activeTab]);
+
+            const activeMembers = members.filter(m => m.subscriptions && m.subscriptions[activeTab]);
+            const activeMembersCount = activeMembers.length;
+            const costs = React.useMemo(() => {
+                const total = Number(editCost) || 0;
+                const count = activeMembersCount || 1;
+                const m = Math.ceil(total / count);
+                return { m, y: m * 12 };
+            }, [editCost, activeMembersCount]);
+
+            // 2. 同步邏輯 (Optimistic UI + 延遲讀取)
+            const syncAction = async (payload, successMsg) => {
+                setIsSyncing(true);
+                if (successMsg) showToast(successMsg);
+                
+                try {
+                    await fetch(GAS_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    // 延長至 5 秒後才在背景重新讀取，給 GAS 足夠時間寫入
+                    setTimeout(() => fetchData(false), 5000);
+                } catch (e) {
+                    showToast("同步失敗", "error");
+                } finally {
+                    setIsSyncing(false);
+                }
+            };
+
+            // Handlers
+            const handleAddMember = () => {
+                if (!newMemberName.trim()) return;
+                const name = newMemberName.trim();
+                setMembers(prev => [...prev, { name: name, subscriptions: {[activeTab]: true}, payments: {[activeTab]: false} }]);
+                setNewMemberName("");
+                showToast("成員已加入 (同步中...)");
+                
+                const mFee = Math.ceil(Number(editCost) / (activeMembersCount + 1));
+                syncAction({
+                    action: 'ADD_MEMBER', serviceId: activeTab, name: name,
+                    startDate: editPeriod, annualAmount: mFee * 12, monthlyShare: mFee
+                });
+            };
+
+            const handleDeleteMember = (name) => {
+                if (!confirm(`確定要移除成員「${name}」嗎？`)) return;
+                setMembers(prev => prev.filter(m => m.name !== name));
+                showToast("成員已移除");
+                syncAction({action: 'DELETE_MEMBER', serviceId: activeTab, memberName: name});
+            };
+
+            const handleMarkAsPaid = (name) => {
+                setMembers(prev => prev.map(m => m.name === name ? {...m, payments: {...m.payments, [activeTab]: true}} : m));
+                showToast("繳費狀態已更新！");
+                syncAction({
+                    action: 'UPDATE_PAYMENT', serviceId: activeTab, memberName: name, paid: true,
+                    startDate: editPeriod, annualAmount: costs.y, monthlyShare: costs.m
+                });
+            };
+
+            const handleTogglePayment = (name, currentStatus) => {
+                const newStatus = !currentStatus;
+                setMembers(prev => prev.map(m => m.name === name ? {...m, payments: {...m.payments, [activeTab]: newStatus}} : m));
+                syncAction({
+                    action: 'UPDATE_PAYMENT', serviceId: activeTab, memberName: name, paid: newStatus,
+                    startDate: editPeriod, annualAmount: costs.y, monthlyShare: costs.m
+                });
+            };
+
+            const handleSaveConfig = () => {
+                syncAction({action: 'UPDATE_SERVICE', serviceId: activeTab, data: {totalCost: editCost, period: editPeriod}}, "設定已儲存");
+            };
+
+            const handleResetPeriod = () => {
+                if (!confirm("確定開啟新的一期？所有人狀態將重置。")) return;
+                setMembers(prev => prev.map(m => {
+                    if (m.subscriptions[activeTab]) {
+                        return { ...m, payments: { ...m.payments, [activeTab]: false } };
+                    }
+                    return m;
+                }));
+                syncAction({action: 'RESET_PERIOD', serviceId: activeTab}, "狀態重置完成");
+            };
+
+            const getFullPeriodRange = () => {
+                if (!editPeriod) return "未設定";
+                const start = new Date(editPeriod);
+                const end = new Date(editPeriod);
+                end.setFullYear(start.getFullYear() + 1);
+                const f = (d) => `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+                return `${f(start)} ~ ${f(end)}`;
+            };
+
+            const handleCopy = (text) => {
+                const el = document.createElement('textarea');
+                el.value = text; document.body.appendChild(el); el.select();
+                document.execCommand('copy'); document.body.removeChild(el);
+                showToast("已成功複製");
+            };
+
+            if (loading) return <LoadingScreen />;
+
+            return (
+                <div className="min-h-screen flex flex-col max-w-6xl mx-auto px-4 py-6">
+                    {toast && <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-xl shadow-xl text-white font-bold flex items-center gap-3 animate-in ${theme.primary}`}><Icons.CheckCircle size={22} /> {toast.message}</div>}
+                    
+                    {shareDialog.isOpen && (
+                        <div className="fixed inset-0 z-[500] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <Card className="max-w-md w-full p-8 space-y-6">
+                                <h3 className={`text-xl font-bold flex items-center gap-2 ${theme.text}`}><Icons.Share /> 繳費通知</h3>
+                                <div className="bg-slate-50 p-5 rounded-xl border font-bold text-slate-600 text-sm whitespace-pre-wrap border-slate-200">{shareDialog.message}</div>
+                                <button className={`w-full py-4 rounded-xl font-bold text-white ${theme.primary} shadow-lg`} onClick={() => { window.open(`https://line.me/R/msg/text/?${encodeURIComponent(shareDialog.message)}`); }}>分享至 LINE</button>
+                                <button className="w-full py-3 text-slate-400 font-bold" onClick={() => setShareDialog({isOpen:false})}>取消</button>
+                            </Card>
+                        </div>
+                    )}
+
+                    <nav className={`border py-5 px-8 sticky top-0 z-[100] mb-8 shadow-sm rounded-[1.5rem] flex items-center justify-between bg-white ${theme.border}`}>
+                        <div className="flex items-center gap-4">
+                            <div className={`p-2.5 rounded-xl text-white ${isAdminMode ? 'bg-slate-800' : theme.primary}`}><Icons.Wallet size={24} /></div>
+                            <div>
+                                <h1 className="font-bold text-xl leading-tight uppercase text-slate-900">阿詹Stream's Payment System</h1>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{isAdminMode ? '管理者專用模式' : '成員帳務查詢介面'}</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsAdminMode(!isAdminMode)} className={`px-5 py-2.5 rounded-full font-bold text-xs transition-all border-2 ${isAdminMode ? 'bg-slate-800 text-white border-slate-800' : `${theme.light} ${theme.text} ${theme.border} hover:bg-white shadow-sm`}`}>
+                            {isAdminMode ? '離開管理' : '管理員登入'}
+                        </button>
+                    </nav>
+
+                    <main className="flex-1">
+                        <div className="flex p-1.5 bg-slate-200 rounded-xl gap-1.5 mb-8 shadow-inner overflow-x-auto no-scrollbar">
+                            {Object.keys(THEMES).map(id => (
+                                <button key={id} onClick={() => setActiveTab(id)} className={`flex-1 min-w-[120px] py-3.5 px-4 text-sm font-bold rounded-lg transition-all ${activeTab === id ? THEMES[id].activeTab : 'text-slate-500 hover:text-slate-700 bg-slate-100/50'}`}>{id.replace('-',' ').toUpperCase()}</button>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+                            <div className="lg:col-span-5 space-y-6 sticky-column">
+                                <Card className={`p-7 border-t-4 ${theme.border}`}>
+                                    <div className="space-y-6">
+                                        <div className="flex flex-row gap-5 items-stretch">
+                                            <div className="w-1/2 space-y-5">
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 mb-1.5 uppercase tracking-widest text-left"><Icons.Calculator size={14}/> 方案總月費</label>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-base text-slate-300 font-light">NT$</span>
+                                                        <input 
+                                                            type="number" value={editCost} disabled={!isAdminMode} 
+                                                            onFocus={() => setIsUserEditing(true)}
+                                                            onChange={e => setEditCost(e.target.value)} 
+                                                            className={`text-4xl font-bold w-full bg-transparent border-b-2 border-slate-100 outline-none transition-colors py-0.5 focus:${theme.border}`} placeholder="0" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 mb-1.5 uppercase tracking-widest text-left"><Icons.Calendar size={14}/> 帳單起始日</label>
+                                                    <input 
+                                                        type="date" value={editPeriod} disabled={!isAdminMode} 
+                                                        onFocus={() => setIsUserEditing(true)}
+                                                        onChange={e => setEditPeriod(e.target.value)} 
+                                                        className="text-base font-bold bg-transparent border-b border-slate-100 outline-none w-full text-slate-700" 
+                                                    />
+                                                </div>
+                                                {isAdminMode && (
+                                                    <button onClick={() => { setIsUserEditing(false); handleSaveConfig(); }} className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 ${theme.btn} shadow-sm active:scale-95 transition-all`}>
+                                                        <Icons.Save size={14}/> 儲存平台設定
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="w-1/2 bg-slate-900 p-5 rounded-2xl text-white shadow-xl space-y-3 relative overflow-hidden flex flex-col justify-center border-l-4 border-l-slate-700">
+                                                <div className="flex flex-col border-b border-white/10 pb-2 text-left text-xs">
+                                                    <span className="opacity-60 uppercase">分攤人數</span>
+                                                    <span className={`text-xl font-bold ${theme.text}`}>{activeMembersCount} 人</span>
+                                                </div>
+                                                <div className="space-y-2 text-left">
+                                                    <div><span className="text-[10px] opacity-60 uppercase text-blue-300">年度應繳</span><div className="text-3xl font-bold text-blue-100 leading-none">${costs.y}</div></div>
+                                                    <div><span className="text-[10px] opacity-60 uppercase text-slate-400">每月平均</span><div className="text-base font-bold text-slate-400">${costs.m} /月</div></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {isAdminMode && (
+                                            <div className="flex gap-2 border-t pt-5 border-slate-100">
+                                                <button onClick={() => fetchData()} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 active:scale-95 transition-all"><Icons.RefreshCw size={16}/> 重新計算</button>
+                                                <button onClick={() => {
+                                                    const fp = getFullPeriodRange();
+                                                    const msg = `您好，打擾各位了！\n這裡有一份關於 ${activeTab.toUpperCase()} 的續約繳費通知。\n\n再麻煩大家協助確認金額並完成轉帳，感謝配合！🙏\n\n💰 年度總額：$${costs.y} 元\n💡 (每月分攤約 $${costs.m} 元)\n🗓️ 週期：${fp}\n🏦 帳號：${BANK_NAME} (${BANK_CODE}) ${BANK_ACCOUNT}\n✨ 轉帳後請點系統「我已轉帳」！\n\n小詹子敬上`;
+                                                    setShareDialog({ isOpen: true, message: msg });
+                                                }} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm ${theme.primary} text-white shadow-md active:scale-95 transition-all`}><Icons.Share size={16}/> 通知</button>
+                                                <button onClick={handleResetPeriod} className="p-3 border border-slate-200 rounded-xl text-slate-400 hover:bg-slate-100 transition-all"><Icons.RefreshCw size={18}/></button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </Card>
+                                {!isAdminMode && activeMembersCount > 0 && (
+                                    <Card className={`bg-white px-6 py-4 border-l-4 shadow-sm space-y-2.5 ${theme.border}`}>
+                                        <div className="flex items-center gap-2">
+                                            <Icons.Wallet size={18} className={theme.text} />
+                                            <h3 className="font-bold text-sm text-slate-800 tracking-tight">轉帳收款資訊</h3>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between items-center bg-slate-50 p-2 px-3 rounded-lg border border-slate-100">
+                                                <div className="flex flex-col"><span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">銀行代碼</span><span className="font-bold text-slate-700 text-xs">{BANK_CODE} {BANK_NAME}</span></div>
+                                                <button onClick={() => handleCopy(BANK_CODE)} className="p-1 hover:bg-white text-slate-400 rounded-lg shadow-sm"><Icons.Copy size={14} /></button>
+                                            </div>
+                                            <div className="flex flex-col items-center bg-blue-50/50 p-3 rounded-xl border border-blue-100 relative">
+                                                <span className="text-[9px] text-blue-400 font-bold uppercase mb-0.5 text-center tracking-widest">專屬收款帳號</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`text-2xl font-bold font-mono tracking-widest ${theme.text}`}>{BANK_ACCOUNT}</span>
+                                                    <button onClick={() => handleCopy(BANK_ACCOUNT)} className={`p-1.5 bg-white rounded-lg shadow-sm hover:scale-110 transition-all ${theme.text}`}><Icons.Copy size={16} /></button>
+                                                </div>
+                                            </div>
+                                            <div className="text-lg text-orange-600 font-bold text-center bg-orange-50/50 py-3.5 rounded-xl border-2 border-orange-100 px-6 leading-relaxed">⚠️ 轉帳備註請務必填寫：<br/>您的姓名 + ({activeTab.toUpperCase()})</div>
+                                        </div>
+                                    </Card>
+                                )}
+                            </div>
+
+                            <div className="lg:col-span-7 space-y-4 text-left">
+                                <div className="flex items-center justify-between px-2">
+                                    <h2 className="text-xl font-bold text-slate-800 tracking-tight text-left">成員繳費狀況明細</h2>
+                                    <Badge color={activeTab === 'apple-music' ? 'orange' : (activeTab === 'youtube' ? 'red' : 'green')}>{activeMembersCount} 名成員</Badge>
+                                </div>
+                                <Card className={`divide-y divide-slate-100 shadow-sm border-t-4 ${theme.border}`}>
+                                    {activeMembersCount === 0 ? (
+                                        <div className="p-24 text-center text-slate-300 font-bold flex flex-col items-center gap-4 opacity-50"><Icons.Users size={64} /> 尚未建立成員</div>
+                                    ) : (
+                                        members.filter(m => m.subscriptions && m.subscriptions[activeTab]).map((m, idx) => {
+                                            const isPaid = m.payments && m.payments[activeTab];
+                                            return (
+                                                <div key={idx} className="p-5 flex flex-col sm:flex-row items-center justify-between hover:bg-slate-50/50 transition-all gap-5 animate-in">
+                                                    <div className="flex items-center gap-5 w-full sm:w-auto">
+                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shadow-sm shrink-0 ${isPaid ? 'bg-green-100 text-green-600' : `${theme.light} ${theme.text}`}`}>{m.name.charAt(0)}</div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="font-bold text-xl leading-tight text-slate-800 truncate">{m.name}</div>
+                                                                <Badge color="slate" className="font-mono text-[9px] opacity-70 whitespace-nowrap">{getFullPeriodRange()}</Badge>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 mt-1.5">
+                                                                <div className={`flex items-center gap-2 font-bold text-[13px] ${isPaid ? 'text-green-600' : 'text-red-500'}`}>
+                                                                    {isPaid ? <Icons.CheckCircle size={14}/> : <Icons.XCircle size={14}/>}
+                                                                    年度：${costs.y} (每月約 ${costs.m} 元)
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                                        {!isPaid && !isAdminMode && (
+                                                            <button onClick={() => handleMarkAsPaid(m.name)} className="px-8 py-3 rounded-xl font-bold text-lg text-white bg-green-600 hover:bg-green-700 shadow-md flex items-center gap-2 animate-in shadow-green-100"><Icons.UserCheck size={20}/> 我已轉帳</button>
+                                                        )}
+                                                        {isAdminMode && (
+                                                            <div className="flex gap-2 animate-in">
+                                                                <button onClick={() => handleTogglePayment(m.name, isPaid)} className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${isPaid ? 'text-slate-400 border-slate-200' : 'bg-green-50 text-green-700 border-green-200'}`}>{isPaid ? '設為未繳' : '確認已收'}</button>
+                                                                <button onClick={() => handleDeleteMember(m.name)} className="p-3 bg-red-600 text-white hover:bg-red-700 transition-colors rounded-xl shadow-sm flex items-center justify-center active:scale-90"><Icons.Trash2 size={20}/></button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                    {isAdminMode && (
+                                        <div className="p-8 bg-slate-50 flex gap-4">
+                                            <input type="text" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddMember()} placeholder="輸入新成員姓名..." className="flex-1 px-5 py-4 rounded-xl border-2 border-slate-200 text-base font-bold outline-none focus:border-blue-500 bg-white" />
+                                            <button onClick={handleAddMember} className="px-10 py-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 flex items-center gap-2 shadow-lg active:scale-95 transition-all"><Icons.Plus size={20}/> 新增成員</button>
+                                        </div>
+                                    )}
+                                </Card>
+                            </div>
+                        </div>
+                    </main>
+                    <footer className="py-20 text-center mt-12 border-t border-slate-200 opacity-40">
+                        <div className="text-lg font-bold tracking-[0.3em] text-slate-500 uppercase font-sans">日安匕禾</div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-2">BEAVER TECH SYSTEM</div>
+                        <div className="text-[9px] mt-8 font-mono font-bold text-slate-300 tracking-widest">{APP_VERSION}</div>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
