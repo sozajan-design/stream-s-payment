@@ -28,14 +28,26 @@
         .animate-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* 電視載入動畫 */
-        @keyframes static-noise { 0% { background-position: 0 0; } 100% { background-position: 100% 100%; } }
-        .tv-static {
-            background-image: repeating-linear-gradient(transparent, transparent 2px, #fff 2px, #fff 4px), repeating-linear-gradient(90deg, transparent, transparent 2px, #fff 2px, #fff 4px);
-            background-size: 100% 100%; opacity: 0.1; animation: static-noise 0.5s infinite linear;
+        /* 電視色塊閃爍動畫 */
+        @keyframes color-flash {
+            0% { background-color: #ef4444; } /* 紅 */
+            20% { background-color: #f97316; } /* 橘 */
+            40% { background-color: #eab308; } /* 黃 */
+            60% { background-color: #22c55e; } /* 綠 */
+            80% { background-color: #3b82f6; } /* 藍 */
+            100% { background-color: #a855f7; } /* 紫 */
         }
-        @keyframes antenna-wiggle { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
-        .antenna { transform-origin: bottom center; animation: antenna-wiggle 2s infinite ease-in-out; }
+        .tv-screen-flash {
+            animation: color-flash 3s infinite steps(1); /* steps(1) 讓顏色直接跳換，更有電視雜訊感 */
+        }
+
+        /* 天線搖晃 */
+        @keyframes antenna-wiggle { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+        .antenna { transform-origin: bottom center; animation: antenna-wiggle 3s infinite ease-in-out; }
+
+        /* 柯基搖尾巴 */
+        @keyframes tail-wag { 0%, 100% { transform: rotate(-20deg); } 50% { transform: rotate(20deg); } }
+        .corgi-tail { transform-origin: bottom center; animation: tail-wag 0.5s infinite; }
     </style>
 </head>
 <body>
@@ -47,7 +59,7 @@
         const BANK_CODE = "812";
         const BANK_NAME = "台新銀行";
         const BANK_ACCOUNT = "28881000738863";
-        const APP_VERSION = "v3.1.6-SyncFix";
+        const APP_VERSION = "v3.1.9-ColorTV";
 
         const THEMES = {
             'apple-music': { 
@@ -106,33 +118,53 @@
             CreditCard: (p) => <LucideIcon name="credit-card" {...p} />,
             Share: (p) => <LucideIcon name="share" {...p} />,
             Save: (p) => <LucideIcon name="save" {...p} />,
-            Database: (p) => <LucideIcon name="database" {...p} />
+            Database: (p) => <LucideIcon name="database" {...p} />,
+            Music: (p) => <LucideIcon name="music" {...p} />,
+            Clapperboard: (p) => <LucideIcon name="clapperboard" {...p} />,
+            PlayCircle: (p) => <LucideIcon name="play-circle" {...p} />
         };
 
-        // --- 載入動畫 ---
+        // --- 載入動畫 (柯基看電視 - 色塊閃爍版) ---
         function LoadingScreen() {
             return (
-                <div className="fixed inset-0 bg-slate-50 z-[9999] flex flex-col items-center justify-center">
-                    <div className="relative mb-8">
-                        <div className="absolute -top-8 left-1/2 w-0.5 h-10 bg-slate-600 -translate-x-1/2 antenna"><div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-slate-600 rounded-full"></div></div>
-                        <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-slate-600 -translate-x-1/2 antenna" style={{animationDelay: '0.5s', transform: 'rotate(15deg)'}}></div>
-                        <div className="w-48 h-36 bg-slate-800 rounded-3xl border-b-8 border-r-8 border-slate-900 shadow-2xl relative flex items-center justify-center p-3">
-                            <div className="w-full h-full bg-blue-100 rounded-xl overflow-hidden relative border-4 border-slate-700 flex items-center justify-center">
-                                <div className="tv-static absolute inset-0"></div>
-                                <Icons.RefreshCw size={32} className="text-blue-500 animate-spin relative z-10" />
+                <div className="fixed inset-0 bg-slate-50 z-[9999] flex flex-col items-center justify-center overflow-hidden">
+                    <div className="relative mb-6 scale-110">
+                        {/* 電視天線 */}
+                        <div className="absolute -top-10 left-1/2 w-0.5 h-12 bg-slate-600 -translate-x-1/2 antenna"><div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-slate-600 rounded-full"></div></div>
+                        <div className="absolute -top-10 left-1/2 w-0.5 h-8 bg-slate-600 -translate-x-1/2 antenna" style={{animationDelay: '0.5s', transform: 'rotate(20deg)'}}></div>
+                        
+                        {/* 電視機 */}
+                        <div className="w-56 h-40 bg-slate-800 rounded-[2rem] border-b-8 border-r-8 border-slate-900 shadow-2xl relative flex items-center justify-center p-4">
+                            {/* 螢幕 */}
+                            <div className="w-full h-full rounded-2xl overflow-hidden relative border-4 border-slate-700 flex items-center justify-center tv-screen-flash">
+                                {/* 載入圈圈 */}
+                                <Icons.RefreshCw size={40} className="text-white animate-spin drop-shadow-md" />
                             </div>
-                            <div className="absolute -right-3 top-6 w-2 h-6 bg-slate-700 rounded-r-md"></div>
-                            <div className="absolute -right-3 top-14 w-2 h-4 bg-slate-700 rounded-r-md"></div>
+                            {/* 旋鈕 */}
+                            <div className="absolute -right-4 top-8 w-3 h-8 bg-slate-700 rounded-r-lg shadow-md"></div>
+                            <div className="absolute -right-4 top-20 w-3 h-5 bg-slate-700 rounded-r-lg shadow-md"></div>
                         </div>
-                        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                            <div className="w-16 h-14 bg-orange-400 rounded-t-full border-4 border-white shadow-lg z-10 relative">
-                                <div className="absolute -top-2 -left-2 w-6 h-6 bg-orange-400 rounded-full border-4 border-white"></div>
-                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-orange-400 rounded-full border-4 border-white"></div>
+
+                        {/* 柯基背影 */}
+                        <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center z-10">
+                            <div className="relative">
+                                {/* 耳朵 */}
+                                <div className="absolute -top-3 -left-3 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[24px] border-b-orange-400 rotate-[-25deg]"></div>
+                                <div className="absolute -top-3 -right-3 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[24px] border-b-orange-400 rotate-[25deg]"></div>
+                                {/* 頭 */}
+                                <div className="w-16 h-14 bg-orange-400 rounded-2xl relative z-10 shadow-sm"></div>
                             </div>
-                            <div className="w-20 h-8 bg-blue-600 rounded-t-3xl -mt-2"></div>
+                            {/* 身體 */}
+                            <div className="w-24 h-16 bg-orange-400 rounded-t-[3rem] -mt-4 relative shadow-md">
+                                {/* 屁股白毛 */}
+                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-10 bg-white rounded-t-full"></div>
+                                {/* 尾巴 */}
+                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-4 h-4 bg-orange-200 rounded-full corgi-tail shadow-sm"></div>
+                            </div>
                         </div>
                     </div>
-                    <h2 className="text-xl font-bold text-slate-700 animate-pulse mt-4 tracking-widest">訊號接收中...</h2>
+                    
+                    <h2 className="text-xl font-bold text-slate-700 animate-pulse mt-12 tracking-widest">訊號接收中...</h2>
                     <p className="text-sm text-slate-400 mt-2 font-bold">阿詹正在努力搬運資料</p>
                 </div>
             );
@@ -180,7 +212,8 @@
                 } catch (e) {
                     console.error("Fetch Error", e);
                 } finally {
-                    setTimeout(() => setLoading(false), 800);
+                    // 確保動畫播放至少 1.5 秒
+                    setTimeout(() => setLoading(false), 1500);
                 }
             };
 
@@ -194,16 +227,7 @@
                 }
             }, [activeTab]);
 
-            const activeMembers = members.filter(m => m.subscriptions && m.subscriptions[activeTab]);
-            const activeMembersCount = activeMembers.length;
-            const costs = React.useMemo(() => {
-                const total = Number(editCost) || 0;
-                const count = activeMembersCount || 1;
-                const m = Math.ceil(total / count);
-                return { m, y: m * 12 };
-            }, [editCost, activeMembersCount]);
-
-            // 2. 同步邏輯 (Optimistic UI + 延遲讀取)
+            // 2. 同步邏輯
             const syncAction = async (payload, successMsg) => {
                 setIsSyncing(true);
                 if (successMsg) showToast(successMsg);
@@ -215,7 +239,6 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    // 延長至 5 秒後才在背景重新讀取，給 GAS 足夠時間寫入
                     setTimeout(() => fetchData(false), 5000);
                 } catch (e) {
                     showToast("同步失敗", "error");
@@ -223,6 +246,15 @@
                     setIsSyncing(false);
                 }
             };
+
+            const activeMembers = members.filter(m => m.subscriptions && m.subscriptions[activeTab]);
+            const activeMembersCount = activeMembers.length;
+            const costs = React.useMemo(() => {
+                const total = Number(editCost) || 0;
+                const count = activeMembersCount || 1;
+                const m = Math.ceil(total / count);
+                return { m, y: m * 12 };
+            }, [editCost, activeMembersCount]);
 
             // Handlers
             const handleAddMember = () => {
@@ -292,7 +324,7 @@
                 const el = document.createElement('textarea');
                 el.value = text; document.body.appendChild(el); el.select();
                 document.execCommand('copy'); document.body.removeChild(el);
-                showToast("已成功複製");
+                showToast("已成功複製到剪貼簿");
             };
 
             if (loading) return <LoadingScreen />;
@@ -384,11 +416,12 @@
                                                     const msg = `您好，打擾各位了！\n這裡有一份關於 ${activeTab.toUpperCase()} 的續約繳費通知。\n\n再麻煩大家協助確認金額並完成轉帳，感謝配合！🙏\n\n💰 年度總額：$${costs.y} 元\n💡 (每月分攤約 $${costs.m} 元)\n🗓️ 週期：${fp}\n🏦 帳號：${BANK_NAME} (${BANK_CODE}) ${BANK_ACCOUNT}\n✨ 轉帳後請點系統「我已轉帳」！\n\n小詹子敬上`;
                                                     setShareDialog({ isOpen: true, message: msg });
                                                 }} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm ${theme.primary} text-white shadow-md active:scale-95 transition-all`}><Icons.Share size={16}/> 通知</button>
-                                                <button onClick={handleResetPeriod} className="p-3 border border-slate-200 rounded-xl text-slate-400 hover:bg-slate-100 transition-all"><Icons.RefreshCw size={18}/></button>
+                                                <button onClick={() => confirm("確定開啟新的一期？") && syncAction('RESET_PERIOD')} className="p-3 border border-slate-200 rounded-xl text-slate-400 hover:bg-slate-100 transition-all"><Icons.RefreshCw size={18}/></button>
                                             </div>
                                         )}
                                     </div>
                                 </Card>
+
                                 {!isAdminMode && activeMembersCount > 0 && (
                                     <Card className={`bg-white px-6 py-4 border-l-4 shadow-sm space-y-2.5 ${theme.border}`}>
                                         <div className="flex items-center gap-2">
